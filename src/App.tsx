@@ -12,6 +12,10 @@ export default function App() {
   const [open, setOpen] = useState(false)
   const home = useRef<PitHandle>(null)
   const list = useRef<ListHandle>(null)
+  const past = useRef<Task[][]>([])
+  const future = useRef<Task[][]>([])
+  const tasksRef = useRef(tasks)
+  tasksRef.current = tasks
 
   useEffect(() => {
     save(tasks)
@@ -28,11 +32,36 @@ export default function App() {
     }
   }
 
+  function record() {
+    past.current.push(tasksRef.current)
+    future.current = []
+  }
+
+  function undo() {
+    const prev = past.current.pop()
+    if (!prev) return
+    future.current.push(tasksRef.current)
+    setTasks(prev)
+  }
+
+  function redo() {
+    const next = future.current.pop()
+    if (!next) return
+    past.current.push(tasksRef.current)
+    setTasks(next)
+  }
+
   useEffect(() => {
     function handle(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setOpen(true)
+        return
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
         return
       }
       const target = e.target as HTMLElement
@@ -47,11 +76,13 @@ export default function App() {
   }, [view])
 
   function spawn(text: string) {
+    record()
     const id = crypto.randomUUID()
     setTasks(prev => [...prev, { id, text }])
   }
 
   function complete(id: string) {
+    record()
     home.current?.explode(id)
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react'
 import Matter from 'matter-js'
 import gsap from 'gsap'
 import Pill from './Pill'
@@ -18,7 +18,7 @@ export type PitHandle = {
     show: () => void
 }
 
-const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
+const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, removed }, ref) {
     const container = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
     const bodies = useRef<Record<string, Matter.Body>>({})
@@ -68,7 +68,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
         const body = bodies.current[id]
         const el = elements.current[id]
         if (body && container.current) {
-            burst(body.position.x, body.position.y, container.current)
+            burst(body.position.x, body.position.y, container.current, engine.current.world)
             Matter.Composite.remove(engine.current.world, body)
         }
         delete bodies.current[id]
