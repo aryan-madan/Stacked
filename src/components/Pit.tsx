@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import Matter from 'matter-js'
 import gsap from 'gsap'
 import Pill from './Pill'
@@ -13,7 +13,7 @@ type Props = {
     update: React.Dispatch<React.SetStateAction<Task[]>>
 }
 
-export default function Pit({ tasks, update }: Props) {
+const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ tasks, update }, ref) {
     const [open, setOpen] = useState(false)
     const container = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
@@ -42,6 +42,7 @@ export default function Pit({ tasks, update }: Props) {
             update(prev => prev.filter(t => t.id !== id))
         }
     }
+    useImperativeHandle(ref, () => ({ explode }))
 
     useEffect(() => {
         const world = engine.current.world
@@ -180,4 +181,6 @@ export default function Pit({ tasks, update }: Props) {
             {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
         </div>
     )
-}
+})
+
+export default Pit

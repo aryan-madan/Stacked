@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Home from './pages/Home'
 import List from './pages/List'
 import { load, save } from './helper/storage'
@@ -7,6 +7,7 @@ import type { Task } from './helper/task'
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(load)
   const [view, setView] = useState<'pit' | 'list'>('pit')
+  const home = useRef<{ explode: (id: string) => void }>(null)
 
   useEffect(() => {
     save(tasks)
@@ -25,12 +26,16 @@ export default function App() {
     return () => window.removeEventListener('keydown', handle)
   }, [])
 
+  function complete(id: string) {
+    home.current?.explode(id)
+  }
+
   return (
     <div className="relative w-screen h-screen">
-      <Home tasks={tasks} update={setTasks} />
+      <Home ref={home} tasks={tasks} update={setTasks} />
       {view === 'list' && (
         <div className="absolute inset-0 bg-black">
-          <List tasks={tasks} update={setTasks} />
+          <List tasks={tasks} complete={complete} />
         </div>
       )}
     </div>
