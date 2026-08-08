@@ -20,7 +20,7 @@ export default function Pill({ task, mount, explode }: Props) {
     useEffect(() => {
         mount(task.id, ref.current)
         return () => mount(task.id, null)
-    }, [])
+    }, [task.id, mount])
 
     function start(e: React.PointerEvent) {
         origin.current = { x: e.clientX, y: e.clientY }

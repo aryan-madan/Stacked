@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react'
 import Matter from 'matter-js'
 import gsap from 'gsap'
 import Pill from './Pill'
@@ -21,6 +21,44 @@ const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ 
     const elements = useRef<Record<string, HTMLDivElement>>({})
     const outside = useRef<Record<string, number>>({})
     const lastSave = useRef(0)
+    const tasksRef = useRef(tasks)
+    tasksRef.current = tasks
+
+    const createBody = useCallback((id: string) => {
+        const el = elements.current[id]
+        if (!el || bodies.current[id]) return
+        const width = el.offsetWidth || 120
+        const height = el.offsetHeight || 48
+        const task = tasksRef.current.find(t => t.id === id)
+        let x = margin + width / 2 + Math.random() * (window.innerWidth - margin * 2 - width)
+        let y = margin + height
+        if (task?.x !== undefined && task?.y !== undefined) {
+            x = task.x
+            y = task.y
+        }
+        const body = Matter.Bodies.rectangle(x, y, width, height, {
+            chamfer: { radius: height / 2 },
+            restitution: 0.2,
+            friction: 0.5,
+            density: 0.001,
+            label: id,
+        })
+        bodies.current[id] = body
+        Matter.Composite.add(engine.current.world, body)
+    }, [])
+
+    const mount = useCallback((id: string, el: HTMLDivElement | null) => {
+        if (el) {
+            elements.current[id] = el
+            createBody(id)
+        } else {
+            if (bodies.current[id]) {
+                Matter.Composite.remove(engine.current.world, bodies.current[id])
+                delete bodies.current[id]
+            }
+            delete elements.current[id]
+        }
+    }, [createBody])
 
     function explode(id: string) {
         const body = bodies.current[id]
@@ -65,6 +103,10 @@ const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ 
         walls = build()
         Matter.Composite.add(world, walls)
 
+        for (const id in elements.current) {
+            createBody(id)
+        }
+
         const mouse = Matter.Mouse.create(container.current!)
         const constraint = Matter.MouseConstraint.create(engine.current, {
             mouse,
@@ -79,6 +121,11 @@ const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ 
             const pad = 120
             const now = Date.now()
             let dirty = false
+            for (const id in elements.current) {
+                if (!bodies.current[id]) {
+                    createBody(id)
+                }
+            }
             for (const id in bodies.current) {
                 const body = bodies.current[id]
                 const el = elements.current[id]
@@ -125,8 +172,10 @@ const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ 
             Matter.Runner.stop(runner)
             Matter.Composite.clear(world, false)
             Matter.Engine.clear(engine.current)
+            bodies.current = {}
+            outside.current = {}
         }
-    }, [])
+    }, [createBody, update])
 
     useEffect(() => {
         function handle(e: KeyboardEvent) {
@@ -143,34 +192,6 @@ const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ 
     function spawn(text: string) {
         const id = crypto.randomUUID()
         update(prev => [...prev, { id, text }])
-    }
-
-    function mount(id: string, el: HTMLDivElement | null) {
-        if (el) {
-            elements.current[id] = el
-            if (!bodies.current[id]) {
-                const width = el.offsetWidth
-                const height = el.offsetHeight
-                const task = tasks.find(t => t.id === id)
-                let x = margin + width / 2 + Math.random() * (window.innerWidth - margin * 2 - width)
-                let y = margin + height
-                if (task?.x !== undefined && task?.y !== undefined) {
-                    x = task.x
-                    y = task.y
-                }
-                const body = Matter.Bodies.rectangle(x, y, width, height, {
-                    chamfer: { radius: height / 2 },
-                    restitution: 0.2,
-                    friction: 0.5,
-                    density: 0.001,
-                    label: id,
-                })
-                bodies.current[id] = body
-                Matter.Composite.add(engine.current.world, body)
-            }
-        } else {
-            delete elements.current[id]
-        }
     }
 
     return (
