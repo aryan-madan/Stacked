@@ -3,36 +3,44 @@ import Matter from 'matter-js'
 import gsap from 'gsap'
 import Pill from './Pill'
 import Input from './Input'
-import type { Task } from '../types/task'
+import { burst } from '../helper/burst'
+import type { Task } from '../helper/task'
+import { load, save } from '../helper/storage'
 
 const margin = 48
 
 export default function Pit() {
-    const [tasks, setTasks] = useState<Task[]>([])
+    const [tasks, setTasks] = useState<Task[]>(load)
     const [open, setOpen] = useState(false)
     const container = useRef<HTMLDivElement>(null)
-    const trash = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
     const bodies = useRef<Record<string, Matter.Body>>({})
     const elements = useRef<Record<string, HTMLDivElement>>({})
 
-    function poof(id: string) {
+    function explode(id: string) {
         const body = bodies.current[id]
-        if (body) Matter.Composite.remove(engine.current.world, body)
-        delete bodies.current[id]
         const el = elements.current[id]
+        if (body && container.current) {
+            burst(body.position.x, body.position.y, container.current)
+            Matter.Composite.remove(engine.current.world, body)
+        }
+        delete bodies.current[id]
         if (el) {
             gsap.to(el, {
                 scale: 0,
                 opacity: 0,
-                duration: 0.3,
-                ease: 'back.in',
+                duration: 0.2,
+                ease: 'power1.in',
                 onComplete: () => setTasks(prev => prev.filter(t => t.id !== id)),
             })
         } else {
             setTasks(prev => prev.filter(t => t.id !== id))
         }
     }
+
+    useEffect(() => {
+        save(tasks)
+    }, [tasks])
 
     useEffect(() => {
         const world = engine.current.world
@@ -45,6 +53,7 @@ export default function Pit() {
             const thick = 100
             return [
                 Matter.Bodies.rectangle(width / 2, height + thick / 2, width, thick, { isStatic: true }),
+                Matter.Bodies.rectangle(width / 2, margin - thick / 2, width, thick, { isStatic: true }),
                 Matter.Bodies.rectangle(margin - thick / 2, height / 2, thick, height * 2, { isStatic: true }),
                 Matter.Bodies.rectangle(width - margin + thick / 2, height / 2, thick, height * 2, { isStatic: true }),
             ]
@@ -59,15 +68,6 @@ export default function Pit() {
             constraint: { stiffness: 0.2, render: { visible: false } },
         })
         Matter.Composite.add(world, constraint)
-
-        Matter.Events.on(constraint, 'enddrag', event => {
-            const body = event.body as Matter.Body
-            if (!body || !trash.current) return
-            const rect = trash.current.getBoundingClientRect()
-            const pos = body.position
-            const inside = pos.x > rect.left && pos.x < rect.right && pos.y > rect.top && pos.y < rect.bottom
-            if (inside) poof(body.label)
-        })
 
         const runner = Matter.Runner.create()
         Matter.Runner.run(runner, engine.current)
@@ -127,7 +127,7 @@ export default function Pit() {
                 const min = margin + width / 2
                 const max = window.innerWidth - margin - width / 2
                 const x = min + Math.random() * Math.max(max - min, 0)
-                const body = Matter.Bodies.rectangle(x, -height, width, height, {
+                const body = Matter.Bodies.rectangle(x, margin + height, width, height, {
                     chamfer: { radius: height / 2 },
                     restitution: 0.3,
                     friction: 0.4,
@@ -143,14 +143,8 @@ export default function Pit() {
 
     return (
         <div ref={container} className="relative w-screen h-screen bg-black overflow-hidden">
-            <div
-                ref={trash}
-                className="absolute top-8 right-8 w-16 h-16 rounded-full border border-white/20 flex items-center justify-center text-white/40 text-xs"
-            >
-                drop
-            </div>
             {tasks.map(task => (
-                <Pill key={task.id} task={task} mount={mount} />
+                <Pill key={task.id} task={task} mount={mount} explode={explode} />
             ))}
             {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
         </div>
