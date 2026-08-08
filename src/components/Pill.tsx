@@ -8,12 +8,13 @@ type Props = {
     explode: (id: string) => void
 }
 
-const hold = 600
+const hold = 900
 const threshold = 6
 
 export default function Pill({ task, mount, explode }: Props) {
     const ref = useRef<HTMLDivElement>(null)
     const timer = useRef<number>()
+    const charge = useRef<gsap.core.Tween>()
     const origin = useRef({ x: 0, y: 0 })
 
     useEffect(() => {
@@ -24,6 +25,13 @@ export default function Pill({ task, mount, explode }: Props) {
     function start(e: React.PointerEvent) {
         origin.current = { x: e.clientX, y: e.clientY }
         timer.current = window.setTimeout(() => explode(task.id), hold)
+        charge.current = gsap.to(ref.current, {
+            opacity: 0.25,
+            duration: 0.12,
+            repeat: -1,
+            yoyo: true,
+            ease: 'none',
+        })
     }
 
     function move(e: React.PointerEvent) {
@@ -34,6 +42,8 @@ export default function Pill({ task, mount, explode }: Props) {
 
     function cancel() {
         window.clearTimeout(timer.current)
+        charge.current?.kill()
+        gsap.to(ref.current, { opacity: 1, duration: 0.2 })
     }
 
     return (
