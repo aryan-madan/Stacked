@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import Pit from '../components/Pit'
+import Pit, { type PitHandle } from '../components/Pit'
 import type { Task } from '../helper/task'
 
 type Props = {
@@ -7,7 +7,7 @@ type Props = {
     update: React.Dispatch<React.SetStateAction<Task[]>>
 }
 
-const Home = forwardRef<{ explode: (id: string) => void }, Props>(function Home({ tasks, update }, ref) {
+const Home = forwardRef<PitHandle, Props>(function Home({ tasks, update }, ref) {
     return <Pit ref={ref} tasks={tasks} update={update} />
 })
 

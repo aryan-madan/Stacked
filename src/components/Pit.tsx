@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallba
 import Matter from 'matter-js'
 import gsap from 'gsap'
 import Pill from './Pill'
-import Input from './Input'
 import { burst } from '../helper/burst'
 import type { Task } from '../helper/task'
 
@@ -13,8 +12,13 @@ type Props = {
     update: React.Dispatch<React.SetStateAction<Task[]>>
 }
 
-const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ tasks, update }, ref) {
-    const [open, setOpen] = useState(false)
+export type PitHandle = {
+    explode: (id: string) => void
+    hide: (after?: () => void) => void
+    show: () => void
+}
+
+const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
     const container = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
     const bodies = useRef<Record<string, Matter.Body>>({})
@@ -69,18 +73,45 @@ const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ 
         }
         delete bodies.current[id]
         if (el) {
-            gsap.to(el, {
-                scale: 0,
-                opacity: 0,
-                duration: 0.2,
-                ease: 'power1.in',
+            gsap.timeline({
                 onComplete: () => update(prev => prev.filter(t => t.id !== id)),
             })
+                .to(el, { scale: 1.15, duration: 0.08, ease: 'power1.out' })
+                .to(el, { scale: 0, opacity: 0, duration: 0.28, ease: 'power2.in' })
         } else {
             update(prev => prev.filter(t => t.id !== id))
         }
     }
-    useImperativeHandle(ref, () => ({ explode }))
+
+    const hide = useCallback((after?: () => void) => {
+        const ids = Object.keys(bodies.current)
+        if (!ids.length) {
+            after?.()
+            return
+        }
+        ids.forEach(id => Matter.Body.setStatic(bodies.current[id], true))
+        ids.forEach((id, i) => {
+            const el = elements.current[id]
+            if (!el) return
+            gsap.to(el, { y: 260, opacity: 0, duration: 0.4, delay: i * 0.02, ease: 'power2.in' })
+        })
+        window.setTimeout(() => after?.(), 400 + ids.length * 20)
+    }, [])
+
+    const show = useCallback(() => {
+        for (const id in bodies.current) {
+            const body = bodies.current[id]
+            const el = elements.current[id]
+            if (!el) continue
+            Matter.Body.setPosition(body, { x: body.position.x, y: -el.offsetHeight })
+            Matter.Body.setVelocity(body, { x: 0, y: 0 })
+            Matter.Body.setStatic(body, false)
+            gsap.set(el, { y: 0, opacity: 0 })
+            gsap.to(el, { opacity: 1, duration: 0.25 })
+        }
+    }, [])
+
+    useImperativeHandle(ref, () => ({ explode, hide, show }))
 
     useEffect(() => {
         const world = engine.current.world
@@ -177,29 +208,11 @@ const Pit = forwardRef<{ explode: (id: string) => void }, Props>(function Pit({ 
         }
     }, [createBody, update])
 
-    useEffect(() => {
-        function handle(e: KeyboardEvent) {
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-                e.preventDefault()
-                e.stopPropagation()
-                setOpen(true)
-            }
-        }
-        window.addEventListener('keydown', handle, { capture: true })
-        return () => window.removeEventListener('keydown', handle, { capture: true })
-    }, [])
-
-    function spawn(text: string) {
-        const id = crypto.randomUUID()
-        update(prev => [...prev, { id, text }])
-    }
-
     return (
         <div ref={container} className="relative w-screen h-screen bg-black overflow-hidden">
             {tasks.map(task => (
                 <Pill key={task.id} task={task} mount={mount} explode={explode} />
             ))}
-            {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
         </div>
     )
 })
