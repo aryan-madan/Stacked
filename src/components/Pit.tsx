@@ -18,7 +18,7 @@ export type PitHandle = {
     show: () => void
 }
 
-const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, removed }, ref) {
+const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
     const container = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
     const bodies = useRef<Record<string, Matter.Body>>({})
@@ -67,6 +67,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, removed }
     function explode(id: string) {
         const body = bodies.current[id]
         const el = elements.current[id]
+        const angle = body ? body.angle * (180 / Math.PI) : 0
         if (body && container.current) {
             burst(body.position.x, body.position.y, container.current, engine.current.world)
             Matter.Composite.remove(engine.current.world, body)
@@ -76,8 +77,8 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, removed }
             gsap.timeline({
                 onComplete: () => update(prev => prev.filter(t => t.id !== id)),
             })
-                .to(el, { scale: 1.15, duration: 0.08, ease: 'power1.out' })
-                .to(el, { scale: 0, opacity: 0, duration: 0.28, ease: 'power2.in' })
+                .to(el, { scale: 1.15, rotate: angle, duration: 0.08, ease: 'power1.out' })
+                .to(el, { scale: 0, opacity: 0, rotate: angle, duration: 0.28, ease: 'power2.in' })
         } else {
             update(prev => prev.filter(t => t.id !== id))
         }
