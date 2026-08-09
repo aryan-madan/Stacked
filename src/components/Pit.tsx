@@ -24,6 +24,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
     const bodies = useRef<Record<string, Matter.Body>>({})
     const elements = useRef<Record<string, HTMLDivElement>>({})
     const outside = useRef<Record<string, number>>({})
+    const hint = useRef<HTMLDivElement>(null)
     const lastSave = useRef(0)
     const tasksRef = useRef(tasks)
     tasksRef.current = tasks
@@ -113,6 +114,10 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
     }, [])
 
     useImperativeHandle(ref, () => ({ explode, hide, show }))
+
+    useEffect(() => {
+        gsap.to(hint.current, { opacity: tasks.length === 0 ? 1 : 0, duration: 0.4, ease: 'power2.out' })
+    }, [tasks.length])
 
     useEffect(() => {
         const world = engine.current.world
@@ -211,6 +216,12 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
 
     return (
         <div ref={container} className="relative w-screen h-screen bg-black overflow-hidden">
+            <div
+                ref={hint}
+                className={`absolute inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide ${tasks.length === 0 ? 'opacity-100' : 'opacity-0'}`}
+            >
+                press ⌘K to add a task
+            </div>
             {tasks.map(task => (
                 <Pill key={task.id} task={task} mount={mount} explode={explode} />
             ))}
