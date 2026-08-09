@@ -9,11 +9,13 @@ type Props = {
 
 export type ListHandle = {
     hide: (after?: () => void) => void
+    vanish: (ids: string[], after?: () => void) => void
 }
 
 const List = forwardRef<ListHandle, Props>(function List({ tasks, complete }, ref) {
     const root = useRef<HTMLDivElement>(null)
     const rows = useRef<Record<string, HTMLDivElement>>({})
+    const known = useRef<Set<string>>(new Set())
     const [checked, setChecked] = useState<Record<string, boolean>>({})
 
     useLayoutEffect(() => {
@@ -24,7 +26,21 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete }, re
             { y: 24, opacity: 0 },
             { y: 0, opacity: 1, duration: 0.45, stagger: 0.045, ease: 'power2.out', delay: 0.1 }
         )
+        known.current = new Set(tasks.map(t => t.id))
     }, [])
+
+    useLayoutEffect(() => {
+        const current = new Set(tasks.map(t => t.id))
+        tasks.forEach(task => {
+            if (!known.current.has(task.id)) {
+                const el = rows.current[task.id]
+                if (el) {
+                    gsap.fromTo(el, { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.6)' })
+                }
+            }
+        })
+        known.current = current
+    }, [tasks])
 
     const hide = (after?: () => void) => {
         const els = Object.values(rows.current)
@@ -32,7 +48,41 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete }, re
         gsap.to(root.current, { opacity: 0, duration: 0.3, delay: 0.05, onComplete: () => after?.() })
     }
 
-    useImperativeHandle(ref, () => ({ hide }))
+    const vanish = (ids: string[], after?: () => void) => {
+        if (!ids.length) {
+            after?.()
+            return
+        }
+        let remaining = ids.length
+        ids.forEach(id => {
+            const el = rows.current[id]
+            if (!el) {
+                remaining -= 1
+                if (remaining === 0) after?.()
+                return
+            }
+            const height = el.offsetHeight
+            gsap.set(el, { height, overflow: 'hidden' })
+            gsap.timeline({
+                onComplete: () => {
+                    remaining -= 1
+                    if (remaining === 0) after?.()
+                },
+            })
+                .to(el, { scale: 1.02, duration: 0.12, ease: 'power1.out' })
+                .to(el, { scale: 1, duration: 0.08 })
+                .to(el, {
+                    height: 0,
+                    paddingTop: 0,
+                    paddingBottom: 0,
+                    opacity: 0,
+                    duration: 0.3,
+                    ease: 'power2.inOut',
+                })
+        })
+    }
+
+    useImperativeHandle(ref, () => ({ hide, vanish }))
 
     function toggle(id: string) {
         if (checked[id]) return

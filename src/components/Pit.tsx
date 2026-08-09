@@ -10,26 +10,30 @@ const margin = 48
 type Props = {
     tasks: Task[]
     update: React.Dispatch<React.SetStateAction<Task[]>>
+    record?: () => void
 }
 
 export type PitHandle = {
     explode: (id: string) => void
     hide: (after?: () => void) => void
     show: () => void
+    vanish: (ids: string[], after?: () => void) => void
 }
 
-const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
+const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record }, ref) {
     const container = useRef<HTMLDivElement>(null)
+    const hint = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
     const bodies = useRef<Record<string, Matter.Body>>({})
     const elements = useRef<Record<string, HTMLDivElement>>({})
     const outside = useRef<Record<string, number>>({})
-    const hint = useRef<HTMLDivElement>(null)
+    const removing = useRef<Record<string, boolean>>({})
     const lastSave = useRef(0)
     const tasksRef = useRef(tasks)
     tasksRef.current = tasks
 
     const createBody = useCallback((id: string) => {
+        if (removing.current[id]) return
         const el = elements.current[id]
         if (!el || bodies.current[id]) return
         const width = el.offsetWidth || 120
@@ -50,6 +54,8 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
         })
         bodies.current[id] = body
         Matter.Composite.add(engine.current.world, body)
+        gsap.killTweensOf(el)
+        gsap.fromTo(el, { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.7)' })
     }, [])
 
     const mount = useCallback((id: string, el: HTMLDivElement | null) => {
@@ -62,10 +68,13 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
                 delete bodies.current[id]
             }
             delete elements.current[id]
+            delete removing.current[id]
         }
     }, [createBody])
 
     function explode(id: string) {
+        record?.()
+        removing.current[id] = true
         const body = bodies.current[id]
         const el = elements.current[id]
         const angle = body ? body.angle * (180 / Math.PI) : 0
@@ -75,15 +84,51 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
         }
         delete bodies.current[id]
         if (el) {
-            gsap.timeline({
+            gsap.killTweensOf(el)
+            gsap.set(el, { rotate: angle })
+            gsap.to(el, {
+                scale: 0,
+                opacity: 0,
+                rotate: angle,
+                duration: 0.3,
+                ease: 'back.in(1.4)',
                 onComplete: () => update(prev => prev.filter(t => t.id !== id)),
             })
-                .to(el, { scale: 1.15, rotate: angle, duration: 0.08, ease: 'power1.out' })
-                .to(el, { scale: 0, opacity: 0, rotate: angle, duration: 0.28, ease: 'power2.in' })
         } else {
             update(prev => prev.filter(t => t.id !== id))
         }
     }
+
+    const vanish = useCallback((ids: string[], after?: () => void) => {
+        if (!ids.length) {
+            after?.()
+            return
+        }
+        let remaining = ids.length
+        ids.forEach(id => {
+            removing.current[id] = true
+            const body = bodies.current[id]
+            const el = elements.current[id]
+            if (body) {
+                Matter.Composite.remove(engine.current.world, body)
+                delete bodies.current[id]
+            }
+            if (el) {
+                gsap.killTweensOf(el)
+                gsap.timeline({
+                    onComplete: () => {
+                        remaining -= 1
+                        if (remaining === 0) after?.()
+                    },
+                })
+                    .to(el, { scale: 1.08, duration: 0.08, ease: 'power1.out' })
+                    .to(el, { scale: 0, opacity: 0, duration: 0.22, ease: 'power2.in' })
+            } else {
+                remaining -= 1
+                if (remaining === 0) after?.()
+            }
+        })
+    }, [])
 
     const hide = useCallback((after?: () => void) => {
         const ids = Object.keys(bodies.current)
@@ -95,6 +140,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
         ids.forEach((id, i) => {
             const el = elements.current[id]
             if (!el) return
+            gsap.killTweensOf(el)
             gsap.to(el, { y: 260, opacity: 0, duration: 0.4, delay: i * 0.02, ease: 'power2.in' })
         })
         window.setTimeout(() => after?.(), 400 + ids.length * 20)
@@ -108,12 +154,13 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
             Matter.Body.setPosition(body, { x: body.position.x, y: -el.offsetHeight })
             Matter.Body.setVelocity(body, { x: 0, y: 0 })
             Matter.Body.setStatic(body, false)
+            gsap.killTweensOf(el)
             gsap.set(el, { y: 0, opacity: 0 })
             gsap.to(el, { opacity: 1, duration: 0.25 })
         }
     }, [])
 
-    useImperativeHandle(ref, () => ({ explode, hide, show }))
+    useImperativeHandle(ref, () => ({ explode, hide, show, vanish }))
 
     useEffect(() => {
         gsap.to(hint.current, { opacity: tasks.length === 0 ? 1 : 0, duration: 0.4, ease: 'power2.out' })
@@ -159,7 +206,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
             const now = Date.now()
             let dirty = false
             for (const id in elements.current) {
-                if (!bodies.current[id]) {
+                if (!bodies.current[id] && !removing.current[id]) {
                     createBody(id)
                 }
             }
@@ -220,7 +267,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update }, ref) {
                 ref={hint}
                 className={`absolute inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide ${tasks.length === 0 ? 'opacity-100' : 'opacity-0'}`}
             >
-                press ⌘K to add a task
+                press ⌘K
             </div>
             {tasks.map(task => (
                 <Pill key={task.id} task={task} mount={mount} explode={explode} />

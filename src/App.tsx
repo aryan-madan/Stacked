@@ -6,6 +6,12 @@ import { load, save } from './helper/storage'
 import type { PitHandle } from './components/Pit'
 import type { Task } from './helper/task'
 
+function diff(a: Task[], b: Task[]) {
+  const bIds = new Set(b.map(t => t.id))
+  const removed = a.filter(t => !bIds.has(t.id)).map(t => t.id)
+  return { removed }
+}
+
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(load)
   const [view, setView] = useState<'pit' | 'list'>('pit')
@@ -15,7 +21,9 @@ export default function App() {
   const past = useRef<Task[][]>([])
   const future = useRef<Task[][]>([])
   const tasksRef = useRef(tasks)
+  const viewRef = useRef(view)
   tasksRef.current = tasks
+  viewRef.current = view
 
   useEffect(() => {
     save(tasks)
@@ -37,18 +45,33 @@ export default function App() {
     future.current = []
   }
 
+  function animate(ids: string[], after: () => void) {
+    if (!ids.length) {
+      after()
+      return
+    }
+    if (viewRef.current === 'list') {
+      home.current?.vanish(ids, () => { })
+      list.current?.vanish(ids, after)
+    } else {
+      home.current?.vanish(ids, after)
+    }
+  }
+
   function undo() {
     const prev = past.current.pop()
     if (!prev) return
     future.current.push(tasksRef.current)
-    setTasks(prev)
+    const { removed } = diff(tasksRef.current, prev)
+    animate(removed, () => setTasks(prev))
   }
 
   function redo() {
     const next = future.current.pop()
     if (!next) return
     past.current.push(tasksRef.current)
-    setTasks(next)
+    const { removed } = diff(tasksRef.current, next)
+    animate(removed, () => setTasks(next))
   }
 
   useEffect(() => {
@@ -82,13 +105,12 @@ export default function App() {
   }
 
   function complete(id: string) {
-    record()
     home.current?.explode(id)
   }
 
   return (
     <div className="relative w-screen h-screen">
-      <Home ref={home} tasks={tasks} update={setTasks} />
+      <Home ref={home} tasks={tasks} update={setTasks} record={record} />
       {view === 'list' && (
         <div className="absolute inset-0 bg-black">
           <List ref={list} tasks={tasks} complete={complete} />
