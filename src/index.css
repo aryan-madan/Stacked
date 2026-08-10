@@ -4,6 +4,7 @@
   --font-sans: "General Sans", sans-serif;
 }
 
+html,
 body {
   background: #0a0a0a;
   overscroll-behavior: none;

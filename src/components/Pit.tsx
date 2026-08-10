@@ -54,6 +54,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record },
         })
         bodies.current[id] = body
         Matter.Composite.add(engine.current.world, body)
+        gsap.set(el, { left: x - width / 2, top: y - height / 2, rotate: 0 })
         gsap.killTweensOf(el)
         gsap.fromTo(el, { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.7)' })
     }, [])
