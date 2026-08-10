@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "General Sans", sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "General Sans", sans-serif;
 }
 
 html,

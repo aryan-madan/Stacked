@@ -34,7 +34,7 @@ export default function Input({ submit, close }: Props) {
     }
 
     return (
-        <div ref={overlay} className="absolute inset-0 flex items-center justify-center bg-black/70">
+        <div ref={overlay} className="absolute inset-0 flex items-center justify-center bg-black">
             <form ref={panel} onSubmit={send} className="w-full max-w-md px-6">
                 <input
                     ref={field}

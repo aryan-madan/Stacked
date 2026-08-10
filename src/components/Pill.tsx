@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import gsap from 'gsap'
 import type { Task } from '../helper/task'
 
@@ -6,12 +6,13 @@ type Props = {
     task: Task
     mount: (id: string, el: HTMLDivElement | null) => void
     explode: (id: string) => void
+    dim?: boolean
 }
 
 const hold = 900
 const threshold = 6
 
-export default function Pill({ task, mount, explode }: Props) {
+export default function Pill({ task, mount, explode, dim }: Props) {
     const ref = useRef<HTMLDivElement>(null)
     const timer = useRef<number>()
     const charge = useRef<gsap.core.Tween>()
@@ -21,6 +22,14 @@ export default function Pill({ task, mount, explode }: Props) {
         mount(task.id, ref.current)
         return () => mount(task.id, null)
     }, [task.id, mount])
+
+    useEffect(() => {
+        gsap.to(ref.current, {
+            backgroundColor: dim ? 'rgba(255,255,255,0.15)' : '#ffffff',
+            duration: 0.25,
+            ease: 'power2.out',
+        })
+    }, [dim])
 
     function start(e: React.PointerEvent) {
         origin.current = { x: e.clientX, y: e.clientY }

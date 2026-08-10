@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import Home from './pages/Home'
 import List, { type ListHandle } from './pages/List'
 import Input from './components/Input'
-import { load, save } from './helper/storage'
+import Search from './components/Search'
+import { load, save, loadView, saveView } from './helper/storage'
 import type { PitHandle } from './components/Pit'
 import type { Task } from './helper/task'
 
@@ -14,8 +15,10 @@ function diff(a: Task[], b: Task[]) {
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(load)
-  const [view, setView] = useState<'pit' | 'list'>('pit')
+  const [view, setView] = useState<'pit' | 'list'>(loadView)
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState(false)
+  const [query, setQuery] = useState('')
   const home = useRef<PitHandle>(null)
   const list = useRef<ListHandle>(null)
   const past = useRef<Task[][]>([])
@@ -28,6 +31,10 @@ export default function App() {
   useEffect(() => {
     save(tasks)
   }, [tasks])
+
+  useEffect(() => {
+    saveView(view)
+  }, [view])
 
   function toggle() {
     if (view === 'pit') {
@@ -81,6 +88,11 @@ export default function App() {
         setOpen(true)
         return
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setSearch(true)
+        return
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -110,13 +122,14 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen">
-      <Home ref={home} tasks={tasks} update={setTasks} record={record} />
+      <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={search ? query : ''} />
       {view === 'list' && (
         <div className="absolute inset-0 bg-black">
-          <List ref={list} tasks={tasks} complete={complete} />
+          <List ref={list} tasks={tasks} complete={complete} filter={search ? query : ''} />
         </div>
       )}
       {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
+      {search && <Search query={query} change={setQuery} close={() => { setSearch(false); setQuery('') }} />}
     </div>
   )
 }

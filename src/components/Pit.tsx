@@ -11,6 +11,7 @@ type Props = {
     tasks: Task[]
     update: React.Dispatch<React.SetStateAction<Task[]>>
     record?: () => void
+    filter?: string
 }
 
 export type PitHandle = {
@@ -20,7 +21,7 @@ export type PitHandle = {
     vanish: (ids: string[], after?: () => void) => void
 }
 
-const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record }, ref) {
+const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, filter }, ref) {
     const container = useRef<HTMLDivElement>(null)
     const hint = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
@@ -268,11 +269,12 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record },
                 ref={hint}
                 className={`absolute inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide ${tasks.length === 0 ? 'opacity-100' : 'opacity-0'}`}
             >
-                press ⌘K
+                press ⌘K to add a task
             </div>
-            {tasks.map(task => (
-                <Pill key={task.id} task={task} mount={mount} explode={explode} />
-            ))}
+            {tasks.map(task => {
+                const match = !filter || task.text.toLowerCase().includes(filter.toLowerCase())
+                return <Pill key={task.id} task={task} mount={mount} explode={explode} dim={!match} />
+            })}
         </div>
     )
 })
