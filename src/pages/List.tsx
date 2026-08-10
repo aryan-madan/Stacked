@@ -18,7 +18,7 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
     const rows = useRef<Record<string, HTMLDivElement>>({})
     const known = useRef<Set<string>>(new Set())
     const [checked, setChecked] = useState<Record<string, boolean>>({})
-    const [focused, setFocused] = useState(-1)
+    const [focusedId, setFocusedId] = useState<string | null>(null)
 
     useLayoutEffect(() => {
         gsap.fromTo(root.current, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power2.out' })
@@ -33,15 +33,26 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
 
     useLayoutEffect(() => {
         const current = new Set(tasks.map(t => t.id))
+        let newlyAddedId: string | null = null
+
         tasks.forEach(task => {
             if (!known.current.has(task.id)) {
+                newlyAddedId = task.id
                 const el = rows.current[task.id]
                 if (el) {
                     gsap.fromTo(el, { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.6)' })
                 }
             }
         })
+
         known.current = current
+
+        if (newlyAddedId) {
+            setFocusedId(newlyAddedId)
+        } else if (focusedId && !current.has(focusedId)) {
+            setFocusedId(null)
+        }
+
         setChecked(prev => {
             const next: Record<string, boolean> = {}
             current.forEach(id => {
@@ -52,29 +63,31 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
     }, [tasks])
 
     useEffect(() => {
-        if (focused > tasks.length - 1) setFocused(tasks.length ? tasks.length - 1 : -1)
-    }, [tasks.length])
-
-    useEffect(() => {
         function handle(e: KeyboardEvent) {
             const target = e.target as HTMLElement
             if (target.tagName === 'INPUT') return
+            if (!tasks.length) return
+
+            const currentIndex = tasks.findIndex(t => t.id === focusedId)
+
             if (e.key === 'ArrowDown') {
                 e.preventDefault()
-                setFocused(f => (f === -1 ? 0 : Math.min(f + 1, tasks.length - 1)))
+                const nextIndex = currentIndex === -1 ? 0 : Math.min(currentIndex + 1, tasks.length - 1)
+                setFocusedId(tasks[nextIndex].id)
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault()
-                setFocused(f => (f === -1 ? tasks.length - 1 : Math.max(f - 1, 0)))
+                const nextIndex = currentIndex === -1 ? tasks.length - 1 : Math.max(currentIndex - 1, 0)
+                setFocusedId(tasks[nextIndex].id)
             } else if (e.key === 'Enter' || e.key === ' ') {
-                if (focused < 0) return
+                if (currentIndex < 0) return
                 e.preventDefault()
-                const task = tasks[focused]
+                const task = tasks[currentIndex]
                 if (task) toggle(task.id)
             }
         }
         window.addEventListener('keydown', handle)
         return () => window.removeEventListener('keydown', handle)
-    }, [tasks, focused])
+    }, [tasks, focusedId])
 
     const hide = (after?: () => void) => {
         const els = Object.values(rows.current)
@@ -83,13 +96,21 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
     }
 
     function collapse(el: HTMLDivElement, done: () => void) {
-        const height = el.offsetHeight
         gsap.timeline({ onComplete: done })
             .to(el, { scale: 1.02, duration: 0.12, ease: 'power1.out' })
             .to(el, { scale: 1, duration: 0.08 })
-            .to(el, { scale: 0.92, opacity: 0, duration: 0.2, ease: 'power2.inOut' })
-            .set(el, { height, overflow: 'hidden' })
-            .to(el, { height: 0, paddingTop: 0, paddingBottom: 0, duration: 0.18, ease: 'power2.inOut' })
+            .set(el, { transformOrigin: 'top center' })
+            .to(el, { scale: 0.95, opacity: 0, duration: 0.15, ease: 'power2.in' }, 'collapse')
+            .set(el, { overflow: 'hidden' })
+            .to(el, {
+                height: 0,
+                paddingTop: 0,
+                paddingBottom: 0,
+                marginTop: 0,
+                marginBottom: 0,
+                duration: 0.22,
+                ease: 'power3.inOut'
+            }, 'collapse+=0.05')
     }
 
     const vanish = (ids: string[], after?: () => void) => {
@@ -133,27 +154,41 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
                         press ⌘K to add a task
                     </div>
                 )}
-                <div className="divide-y divide-white/10">
-                    {tasks.map((task, i) => {
+                <div className="flex flex-col">
+                    {tasks.map((task) => {
                         const match = !filter || task.text.toLowerCase().includes(filter.toLowerCase())
+                        const isFocused = focusedId === task.id
                         return (
                             <div
                                 key={task.id}
                                 ref={el => { if (el) rows.current[task.id] = el; else delete rows.current[task.id] }}
-                                className={`flex items-center gap-4 py-4 px-3 -mx-3 transition-colors duration-150 ${focused === i ? 'bg-white/10' : ''}`}
+                                onClick={() => setFocusedId(task.id)}
+                                className={`flex items-center gap-4 py-3.5 px-4 rounded-xl transition-colors duration-150 select-none ${isFocused
+                                        ? 'bg-white text-black shadow-lg shadow-black/20'
+                                        : 'hover:bg-white/[0.05] text-white'
+                                    }`}
                             >
                                 <button
-                                    onClick={() => toggle(task.id)}
-                                    className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition ${checked[task.id] ? 'bg-white' : 'border border-white/40 hover:border-white'}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        toggle(task.id)
+                                    }}
+                                    className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-colors duration-150 ${checked[task.id]
+                                            ? isFocused ? 'bg-black text-white' : 'bg-white text-black'
+                                            : isFocused ? 'border border-black/40 hover:border-black' : 'border border-white/40 hover:border-white'
+                                        }`}
                                 >
                                     {checked[task.id] && (
-                                        <svg viewBox="0 0 24 24" className="w-3 h-3">
-                                            <path d="M5 13l4 4L19 7" stroke="black" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                        <svg viewBox="0 0 24 24" className="w-3 h-3 stroke-current" fill="none">
+                                            <path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                                         </svg>
                                     )}
                                 </button>
                                 <span
-                                    className={`text-lg transition-opacity duration-300 ${checked[task.id] ? 'opacity-40 line-through' : match ? 'opacity-100' : 'opacity-30'}`}
+                                    className={`text-lg transition-opacity duration-300 ${checked[task.id]
+                                            ? 'opacity-40 line-through'
+                                            : match ? 'opacity-100' : 'opacity-30'
+                                        }`}
                                 >
                                     {task.text}
                                 </span>
