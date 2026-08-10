@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import gsap from 'gsap'
 import type { Task } from '../helper/task'
 
@@ -17,7 +17,7 @@ export default function Pill({ task, mount, explode }: Props) {
     const charge = useRef<gsap.core.Tween>()
     const origin = useRef({ x: 0, y: 0 })
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         mount(task.id, ref.current)
         return () => mount(task.id, null)
     }, [task.id, mount])
