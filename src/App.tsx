@@ -130,6 +130,16 @@ export default function App() {
       )}
       {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
       {search && <Search query={query} change={setQuery} close={() => { setSearch(false); setQuery('') }} />}
+      <button
+        onClick={() => setOpen(true)}
+        className="hidden pointer-coarse:flex fixed items-center justify-center rounded-full bg-white text-black text-3xl leading-none shadow-lg w-14 h-14"
+        style={{
+          right: 'max(24px, env(safe-area-inset-right))',
+          bottom: 'max(24px, env(safe-area-inset-bottom))',
+        }}
+      >
+        +
+      </button>
     </div>
   )
 }

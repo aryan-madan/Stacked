@@ -14,8 +14,8 @@ const threshold = 6
 
 export default function Pill({ task, mount, explode, dim }: Props) {
     const ref = useRef<HTMLDivElement>(null)
-    const timer = useRef<number>()
-    const charge = useRef<gsap.core.Tween>()
+    const timer = useRef<number | undefined>(undefined)
+    const charge = useRef<gsap.core.Tween | undefined>(undefined)
     const origin = useRef({ x: 0, y: 0 })
 
     useLayoutEffect(() => {
@@ -32,7 +32,9 @@ export default function Pill({ task, mount, explode, dim }: Props) {
     }, [dim])
 
     function start(e: React.PointerEvent) {
+        cancel()
         origin.current = { x: e.clientX, y: e.clientY }
+
         timer.current = window.setTimeout(() => explode(task.id), hold)
         charge.current = gsap.to(ref.current, {
             opacity: 0.25,
@@ -40,6 +42,7 @@ export default function Pill({ task, mount, explode, dim }: Props) {
             repeat: -1,
             yoyo: true,
             ease: 'none',
+            delay: 0.3,
         })
     }
 
@@ -50,9 +53,15 @@ export default function Pill({ task, mount, explode, dim }: Props) {
     }
 
     function cancel() {
-        window.clearTimeout(timer.current)
-        charge.current?.kill()
-        gsap.to(ref.current, { opacity: 1, duration: 0.2 })
+        if (timer.current !== undefined) {
+            window.clearTimeout(timer.current)
+            timer.current = undefined
+        }
+        if (charge.current) {
+            charge.current.kill()
+            charge.current = undefined
+        }
+        gsap.to(ref.current, { opacity: 1, duration: 0.15 })
     }
 
     return (
@@ -62,6 +71,7 @@ export default function Pill({ task, mount, explode, dim }: Props) {
             onPointerMove={move}
             onPointerUp={cancel}
             onPointerLeave={cancel}
+            style={{ touchAction: 'none' }}
             className="absolute whitespace-nowrap px-7 py-4 rounded-full bg-white text-black text-lg font-medium select-none cursor-grab active:cursor-grabbing"
         >
             {task.text}

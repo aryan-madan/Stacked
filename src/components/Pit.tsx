@@ -249,6 +249,19 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
             Matter.Composite.remove(world, walls)
             walls = build()
             Matter.Composite.add(world, walls)
+            const width = window.innerWidth
+            const height = window.innerHeight
+            for (const id in bodies.current) {
+                const body = bodies.current[id]
+                const el = elements.current[id]
+                if (!el) continue
+                const halfWidth = el.offsetWidth / 2
+                const halfHeight = el.offsetHeight / 2
+                const x = Math.min(Math.max(body.position.x, halfWidth), width - halfWidth)
+                const y = Math.min(body.position.y, height - halfHeight)
+                Matter.Body.setPosition(body, { x, y })
+                Matter.Body.setVelocity(body, { x: 0, y: 0 })
+            }
         }
         window.addEventListener('resize', resize)
 

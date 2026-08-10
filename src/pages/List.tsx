@@ -147,7 +147,7 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
     }
 
     return (
-        <div ref={root} className="w-screen h-screen text-white overflow-auto pt-[18vh] px-16 pb-16">
+        <div ref={root} className="w-screen h-screen text-white overflow-auto pt-[18vh] px-16 pb-16" style={{ touchAction: 'pan-y', paddingTop: 'max(18vh, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="max-w-md mx-auto">
                 {tasks.length === 0 && (
                     <div className="text-white/25 text-sm tracking-wide py-12 text-center">
@@ -164,8 +164,8 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
                                 ref={el => { if (el) rows.current[task.id] = el; else delete rows.current[task.id] }}
                                 onClick={() => setFocusedId(task.id)}
                                 className={`flex items-center gap-4 py-3.5 px-4 rounded-xl transition-colors duration-150 select-none ${isFocused
-                                        ? 'bg-white text-black shadow-lg shadow-black/20'
-                                        : 'hover:bg-white/[0.05] text-white'
+                                    ? 'bg-white text-black shadow-lg shadow-black/20'
+                                    : 'hover:bg-white/[0.05] text-white'
                                     }`}
                             >
                                 <button
@@ -174,8 +174,8 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
                                         toggle(task.id)
                                     }}
                                     className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-colors duration-150 ${checked[task.id]
-                                            ? isFocused ? 'bg-black text-white' : 'bg-white text-black'
-                                            : isFocused ? 'border border-black/40 hover:border-black' : 'border border-white/40 hover:border-white'
+                                        ? isFocused ? 'bg-black text-white' : 'bg-white text-black'
+                                        : isFocused ? 'border border-black/40 hover:border-black' : 'border border-white/40 hover:border-white'
                                         }`}
                                 >
                                     {checked[task.id] && (
@@ -186,8 +186,8 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
                                 </button>
                                 <span
                                     className={`text-lg transition-opacity duration-300 ${checked[task.id]
-                                            ? 'opacity-40 line-through'
-                                            : match ? 'opacity-100' : 'opacity-30'
+                                        ? 'opacity-40 line-through'
+                                        : match ? 'opacity-100' : 'opacity-30'
                                         }`}
                                 >
                                     {task.text}
