@@ -280,9 +280,10 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
         <div ref={container} className="relative w-screen h-screen bg-black overflow-hidden">
             <div
                 ref={hint}
-                className={`absolute inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide ${tasks.length === 0 ? 'opacity-100' : 'opacity-0'}`}
+                className={`absolute inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide text-center px-8 ${tasks.length === 0 ? 'opacity-100' : 'opacity-0'}`}
             >
-                press ⌘K to add a task
+                <span className="pointer-coarse:hidden">press ⌘K to add a task</span>
+                <span className="hidden pointer-coarse:inline">swipe down to add a task</span>
             </div>
             {tasks.map(task => {
                 const match = !filter || task.text.toLowerCase().includes(filter.toLowerCase())

@@ -147,11 +147,12 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
     }
 
     return (
-        <div ref={root} className="w-screen h-screen text-white overflow-auto pt-[18vh] px-16 pb-16" style={{ touchAction: 'pan-y', paddingTop: 'max(18vh, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div ref={root} className="w-screen h-screen text-white overflow-auto pt-[18vh] px-6 sm:px-16 pb-16" style={{ touchAction: 'pan-y', paddingTop: 'max(18vh, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="max-w-md mx-auto">
                 {tasks.length === 0 && (
-                    <div className="text-white/25 text-sm tracking-wide py-12 text-center">
-                        press ⌘K to add a task
+                    <div className="fixed inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide text-center px-8">
+                        <span className="pointer-coarse:hidden">press ⌘K to add a task</span>
+                        <span className="hidden pointer-coarse:inline">swipe down to add a task</span>
                     </div>
                 )}
                 <div className="flex flex-col">

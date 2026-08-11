@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import gsap from 'gsap'
 import Home from './pages/Home'
 import List, { type ListHandle } from './pages/List'
 import Input from './components/Input'
@@ -13,6 +14,10 @@ function diff(a: Task[], b: Task[]) {
   return { removed }
 }
 
+const swipe = 70
+const zone = 140
+const pullThreshold = 80
+
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(load)
   const [view, setView] = useState<'pit' | 'list'>(loadView)
@@ -25,6 +30,10 @@ export default function App() {
   const future = useRef<Task[][]>([])
   const tasksRef = useRef(tasks)
   const viewRef = useRef(view)
+  const gesture = useRef({ x: 0, y: 0 })
+  const pull = useRef({ id: -1, active: false, startY: 0 })
+  const pullRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   tasksRef.current = tasks
   viewRef.current = view
 
@@ -120,26 +129,96 @@ export default function App() {
     home.current?.explode(id)
   }
 
+  function gestureDown(e: React.PointerEvent) {
+    if (open || search) return
+    const target = e.target as HTMLElement
+    if (target.closest('[data-pill]') || target.tagName === 'BUTTON' || target.tagName === 'INPUT') return
+    gesture.current = { x: e.clientX, y: e.clientY }
+    if (e.clientY < zone) {
+      pull.current = { id: e.pointerId, active: true, startY: e.clientY }
+    }
+  }
+
+  function gestureMove(e: React.PointerEvent) {
+    if (!pull.current.active || e.pointerId !== pull.current.id) return
+    const dy = Math.max(0, e.clientY - pull.current.startY)
+    const dampedY = Math.pow(dy, 0.85) * 1.5
+    const progress = Math.min(Math.max(dy / pullThreshold, 0), 1)
+
+    gsap.set(containerRef.current, {
+      y: dampedY,
+      borderTopLeftRadius: `${progress * 40}px`,
+      borderTopRightRadius: `${progress * 40}px`
+    })
+    gsap.set(pullRef.current, { opacity: progress })
+  }
+
+  function gestureUp(e: React.PointerEvent) {
+    if (pull.current.active && e.pointerId === pull.current.id) {
+      const dy = e.clientY - pull.current.startY
+      pull.current.active = false
+      if (dy > pullThreshold) {
+        gsap.to(containerRef.current, {
+          y: 0,
+          borderTopLeftRadius: '0px',
+          borderTopRightRadius: '0px',
+          duration: 0.3,
+          ease: 'power2.out'
+        })
+        gsap.to(pullRef.current, { opacity: 0, duration: 0.2 })
+        setOpen(true)
+      } else {
+        gsap.to(containerRef.current, {
+          y: 0,
+          borderTopLeftRadius: '0px',
+          borderTopRightRadius: '0px',
+          duration: 0.2,
+          ease: 'power2.out'
+        })
+        gsap.to(pullRef.current, { opacity: 0, duration: 0.2 })
+      }
+      return
+    }
+    if (open || search) return
+    const dx = e.clientX - gesture.current.x
+    const dy = e.clientY - gesture.current.y
+    if (Math.abs(dx) < swipe || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    if (dx < 0 && view === 'pit') toggle()
+    if (dx > 0 && view === 'list') toggle()
+  }
+
   return (
-    <div className="relative w-screen h-screen">
-      <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={search ? query : ''} />
-      {view === 'list' && (
-        <div className="absolute inset-0 bg-black">
-          <List ref={list} tasks={tasks} complete={complete} filter={search ? query : ''} />
-        </div>
-      )}
-      {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
-      {search && <Search query={query} change={setQuery} close={() => { setSearch(false); setQuery('') }} />}
-      <button
-        onClick={() => setOpen(true)}
-        className="hidden pointer-coarse:flex fixed items-center justify-center rounded-full bg-white text-black text-3xl leading-none shadow-lg w-14 h-14"
+    <div
+      className="relative w-screen h-screen overflow-hidden bg-[#121212]"
+      onPointerDown={gestureDown}
+      onPointerMove={gestureMove}
+      onPointerUp={gestureUp}
+    >
+      <div
+        ref={pullRef}
+        className="fixed top-0 left-0 right-0 z-0 flex items-center justify-center text-white/40 text-sm tracking-wide select-none pointer-events-none opacity-0"
         style={{
-          right: 'max(24px, env(safe-area-inset-right))',
-          bottom: 'max(24px, env(safe-area-inset-bottom))',
+          height: 'calc(50px + env(safe-area-inset-top, 0px))',
+          paddingTop: 'env(safe-area-inset-top, 12px)'
         }}
       >
-        +
-      </button>
+        new task
+      </div>
+
+      <div
+        ref={containerRef}
+        className="w-full h-full bg-black overflow-hidden relative shadow-2xl z-10"
+      >
+        <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={search ? query : ''} />
+        {view === 'list' && (
+          <div className="absolute inset-0 bg-black">
+            <List ref={list} tasks={tasks} complete={complete} filter={search ? query : ''} />
+          </div>
+        )}
+      </div>
+
+      {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
+      {search && <Search query={query} change={setQuery} close={() => { setSearch(false); setQuery('') }} />}
     </div>
   )
 }

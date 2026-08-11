@@ -6,11 +6,15 @@ type Props = {
     close: () => void
 }
 
+const limit = 140
+const swipe = 70
+
 export default function Input({ submit, close }: Props) {
     const [value, setValue] = useState('')
     const field = useRef<HTMLInputElement>(null)
     const overlay = useRef<HTMLDivElement>(null)
     const panel = useRef<HTMLFormElement>(null)
+    const start = useRef({ x: 0, y: 0 })
 
     useEffect(() => {
         field.current?.focus()
@@ -33,12 +37,34 @@ export default function Input({ submit, close }: Props) {
         if (text) submit(text)
     }
 
+    function down(e: React.PointerEvent) {
+        start.current = { x: e.clientX, y: e.clientY }
+    }
+
+    function up(e: React.PointerEvent) {
+        const dy = e.clientY - start.current.y
+        const dx = e.clientX - start.current.x
+        if (dy > swipe && Math.abs(dx) < swipe) dismiss()
+    }
+
     return (
-        <div ref={overlay} className="absolute inset-0 flex items-center justify-center bg-black">
-            <form ref={panel} onSubmit={send} className="w-full max-w-md px-6">
+        <div
+            ref={overlay}
+            onClick={dismiss}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+        >
+            <form
+                ref={panel}
+                onSubmit={send}
+                onPointerDown={down}
+                onPointerUp={up}
+                onClick={e => e.stopPropagation()}
+                className="w-full max-w-md px-6"
+            >
                 <input
                     ref={field}
                     value={value}
+                    maxLength={limit}
                     onChange={e => setValue(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Escape') dismiss() }}
                     placeholder="What needs doing?"
