@@ -278,7 +278,7 @@ export default function App() {
           className="absolute left-1/2 -translate-x-1/2 z-50 pointer-events-none mix-blend-difference h-6 w-auto"
           style={{ top: 'calc(max(2.5rem, env(safe-area-inset-top)) + 0.75rem)' }}
         />
-        <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={query} isSearch={search} onToggleView={toggle} />
+        <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={query} onToggleView={toggle} />
         {view === 'list' && (
           <div className="absolute inset-0 bg-black">
             <List

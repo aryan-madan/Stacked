@@ -14,7 +14,6 @@ type Props = {
     update: React.Dispatch<React.SetStateAction<Task[]>>
     record?: () => void
     filter?: string
-    isSearch?: boolean
     onToggleView?: () => void
 }
 
@@ -25,7 +24,7 @@ export type PitHandle = {
     vanish: (ids: string[], after?: () => void) => void
 }
 
-const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, filter, isSearch, onToggleView }, ref) {
+const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, filter, onToggleView }, ref) {
     const container = useRef<HTMLDivElement>(null)
     const hint = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
@@ -33,12 +32,10 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
     const elements = useRef<Record<string, HTMLDivElement>>({})
     const outside = useRef<Record<string, number>>({})
     const removing = useRef<Record<string, boolean>>({})
-    const topWallRef = useRef<Matter.Body | null>(null)
     const lastSave = useRef(0)
     const tasksRef = useRef(tasks)
     const tiltX = useRef(0)
     const tiltY = useRef(0)
-    const isSearchRef = useRef(isSearch)
 
     const lastBgTap = useRef<number>(0)
     const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -66,9 +63,6 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
         watchTilt((x, y) => {
             tiltX.current = tiltX.current * 0.75 + x * 0.25
             tiltY.current = tiltY.current * 0.75 + y * 0.25
-            
-            const isMobile = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window
-            if (isMobile && isSearchRef.current) return
 
             engine.current.gravity.x = tiltX.current * 1.3
             engine.current.gravity.y = tiltY.current * 1.3
@@ -81,32 +75,6 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
             unsub?.()
         }
     }, [])
-
-    useEffect(() => {
-        isSearchRef.current = isSearch
-        const isMobile = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window
-        
-        if (isMobile && isSearch) {
-            engine.current.gravity.y = -1.5
-            engine.current.gravity.x = 0
-            if (topWallRef.current) {
-                Matter.Body.setPosition(topWallRef.current, { x: window.innerWidth / 2, y: 80 })
-            }
-            for (const id in bodies.current) {
-                const body = bodies.current[id]
-                Matter.Sleeping.set(body, false)
-                Matter.Body.setVelocity(body, { x: body.velocity.x, y: -8 })
-            }
-        } else {
-            engine.current.gravity.y = 1.3
-            if (topWallRef.current) {
-                Matter.Body.setPosition(topWallRef.current, { x: window.innerWidth / 2, y: -1000 })
-            }
-            for (const id in bodies.current) {
-                Matter.Sleeping.set(bodies.current[id], false)
-            }
-        }
-    }, [isSearch])
 
     tasksRef.current = tasks
 
@@ -273,27 +241,32 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
             restitution: 0.2,
             friction: 0.5,
         })
-        const topWall = Matter.Bodies.rectangle(width / 2, -1000, width * 2, thickness, {
-            isStatic: true,
-            restitution: 0.2,
-            friction: 0.5,
-        })
-        topWallRef.current = topWall
 
-        Matter.Composite.add(world, [bottomWall, leftWall, rightWall, topWall])
+        Matter.Composite.add(world, [bottomWall, leftWall, rightWall])
 
         const handleResize = () => {
+            const active = document.activeElement as HTMLElement | null
+            if (active && active.tagName === 'INPUT') return
+
             width = window.innerWidth
             height = window.innerHeight
-            
+
             Matter.Body.setPosition(bottomWall, { x: width / 2, y: height + thickness / 2 })
             Matter.Body.setPosition(leftWall, { x: -thickness / 2, y: height / 2 })
             Matter.Body.setPosition(rightWall, { x: width + thickness / 2, y: height / 2 })
-            
-            if (topWallRef.current) {
-                const isMobile = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window
-                const topY = (isMobile && isSearchRef.current) ? 80 : -1000
-                Matter.Body.setPosition(topWallRef.current, { x: width / 2, y: topY })
+
+            for (const id in bodies.current) {
+                const body = bodies.current[id]
+                const el = elements.current[id]
+                if (!el) continue
+                const halfW = el.offsetWidth / 2
+                const halfH = el.offsetHeight / 2
+                const x = Math.min(Math.max(body.position.x, margin + halfW), width - margin - halfW)
+                const y = Math.min(Math.max(body.position.y, margin + halfH), height - margin - halfH)
+                if (x !== body.position.x || y !== body.position.y) {
+                    Matter.Body.setPosition(body, { x, y })
+                    Matter.Body.setVelocity(body, { x: 0, y: 0 })
+                }
             }
         }
 
@@ -366,7 +339,6 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
             Matter.Engine.clear(engine.current)
             bodies.current = {}
             outside.current = {}
-            topWallRef.current = null
         }
     }, [createBody, update])
 
