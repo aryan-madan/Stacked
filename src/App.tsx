@@ -194,6 +194,13 @@ export default function App() {
       onPointerMove={gestureMove}
       onPointerUp={gestureUp}
     >
+      <img
+        src="/assets/logo.svg"
+        alt="Logo"
+        className="fixed left-1/2 -translate-x-1/2 z-50 pointer-events-none mix-blend-difference h-6 w-auto"
+        style={{ top: 'calc(max(2.5rem, env(safe-area-inset-top)) + 0.75rem)' }}
+      />
+
       <div
         ref={pullRef}
         className="fixed left-1/2 z-50 pointer-events-none opacity-0 text-white/30 text-sm font-medium tracking-wide select-none outline-none border-none"
