@@ -32,6 +32,8 @@ export default function App() {
   const pull = useRef({ id: -1, active: false, startY: 0 })
   const pullRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const holdPos = useRef({ x: 0, y: 0 })
   tasksRef.current = tasks
   viewRef.current = view
 
@@ -42,6 +44,41 @@ export default function App() {
   useEffect(() => {
     saveView(view)
   }, [view])
+
+  useEffect(() => {
+    if (!open && !search) return
+
+    window.history.pushState({ modal: open ? 'input' : 'search' }, '')
+
+    const handlePopState = () => {
+      if (open) setOpen(false)
+      if (search) {
+        setSearch(false)
+        setQuery('')
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [open, search])
+
+  function closeInput() {
+    setOpen(false)
+    if (window.history.state?.modal === 'input') {
+      window.history.back()
+    }
+  }
+
+  function closeSearch() {
+    setSearch(false)
+    setQuery('')
+    if (window.history.state?.modal === 'search') {
+      window.history.back()
+    }
+  }
 
   function toggle() {
     if (view === 'pit') {
@@ -165,6 +202,22 @@ export default function App() {
     if (open || search) return
     const target = e.target as HTMLElement
     if (target.closest('[data-pill]') || target.tagName === 'BUTTON' || target.tagName === 'INPUT') return
+
+    const isMobile = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window
+
+    // Only allow long-press search on desktop or list view, disable on mobile pit view to prevent keyboard resize bugs
+    if (!isMobile || view !== 'pit') {
+      holdPos.current = { x: e.clientX, y: e.clientY }
+      if (holdTimer.current) clearTimeout(holdTimer.current)
+      holdTimer.current = setTimeout(() => {
+        setSearch(true)
+        if (pull.current.active) {
+          pull.current.active = false
+          endPull(false)
+        }
+      }, 450)
+    }
+
     if (view === 'pit' && e.clientY < zone) {
       pull.current = { id: e.pointerId, active: true, startY: e.clientY }
       beginPull()
@@ -172,6 +225,14 @@ export default function App() {
   }
 
   function gestureMove(e: React.PointerEvent) {
+    if (holdTimer.current) {
+      const dx = Math.abs(e.clientX - holdPos.current.x)
+      const dy = Math.abs(e.clientY - holdPos.current.y)
+      if (dx > 10 || dy > 10) {
+        clearTimeout(holdTimer.current)
+        holdTimer.current = null
+      }
+    }
     if (!pull.current.active || e.pointerId !== pull.current.id) return
     const dy = Math.max(0, e.clientY - pull.current.startY)
     const progress = dy / pullThreshold
@@ -179,6 +240,10 @@ export default function App() {
   }
 
   function gestureUp(e: React.PointerEvent) {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
     if (pull.current.active && e.pointerId === pull.current.id) {
       const dy = e.clientY - pull.current.startY
       pull.current.active = false
@@ -193,14 +258,8 @@ export default function App() {
       onPointerDown={gestureDown}
       onPointerMove={gestureMove}
       onPointerUp={gestureUp}
+      onPointerCancel={gestureUp}
     >
-      <img
-        src="/assets/logo.svg"
-        alt="Logo"
-        className="fixed left-1/2 -translate-x-1/2 z-50 pointer-events-none mix-blend-difference h-6 w-auto"
-        style={{ top: 'calc(max(2.5rem, env(safe-area-inset-top)) + 0.75rem)' }}
-      />
-
       <div
         ref={pullRef}
         className="fixed left-1/2 z-50 pointer-events-none opacity-0 text-white/30 text-sm font-medium tracking-wide select-none outline-none border-none"
@@ -213,14 +272,20 @@ export default function App() {
         ref={containerRef}
         className="w-full h-full bg-black overflow-hidden relative shadow-2xl z-10"
       >
-        <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={search ? query : ''} onToggleView={toggle} />
+        <img
+          src="/assets/logo.svg"
+          alt="Logo"
+          className="absolute left-1/2 -translate-x-1/2 z-50 pointer-events-none mix-blend-difference h-6 w-auto"
+          style={{ top: 'calc(max(2.5rem, env(safe-area-inset-top)) + 0.75rem)' }}
+        />
+        <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={query} isSearch={search} onToggleView={toggle} />
         {view === 'list' && (
           <div className="absolute inset-0 bg-black">
             <List
               ref={list}
               tasks={tasks}
               complete={complete}
-              filter={search ? query : ''}
+              filter={query}
               pullStart={beginPull}
               pullMove={movePull}
               pullEnd={endPull}
@@ -230,8 +295,8 @@ export default function App() {
         )}
       </div>
 
-      {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} toggleView={toggle} />}
-      {search && <Search query={query} change={setQuery} close={() => { setSearch(false); setQuery('') }} toggleView={toggle} />}
+      {open && <Input submit={t => { spawn(t); closeInput() }} close={closeInput} toggleView={toggle} />}
+      {search && <Search query={query} change={setQuery} close={closeSearch} toggleView={toggle} />}
     </div>
   )
 }

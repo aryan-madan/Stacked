@@ -16,26 +16,11 @@ export default function Search({ query, change, close, toggleView }: Props) {
 
     useEffect(() => {
         field.current?.focus()
-        gsap.fromTo(panel.current, { y: -12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, ease: 'power2.out' })
-
-        window.history.pushState({ modal: 'search' }, '')
-
-        const handlePopState = () => {
-            dismiss()
-        }
-
-        window.addEventListener('popstate', handlePopState)
-
-        return () => {
-            window.removeEventListener('popstate', handlePopState)
-            if (window.history.state?.modal === 'search') {
-                window.history.back()
-            }
-        }
+        gsap.fromTo(panel.current, { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, ease: 'power2.out' })
     }, [])
 
     function dismiss() {
-        gsap.to(panel.current, { y: -12, opacity: 0, duration: 0.15, ease: 'power1.in', onComplete: close })
+        gsap.to(panel.current, { y: 12, opacity: 0, duration: 0.15, ease: 'power1.in', onComplete: close })
     }
 
     function handleDoubleTap() {
@@ -50,7 +35,8 @@ export default function Search({ query, change, close, toggleView }: Props) {
         <div
             ref={overlay}
             onClick={dismiss}
-            className="fixed inset-0 z-50 flex justify-center items-start pt-8"
+            className="fixed inset-0 z-50 flex justify-center items-end pb-8 pointer-events-auto"
+            style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
         >
             <div
                 ref={panel}
