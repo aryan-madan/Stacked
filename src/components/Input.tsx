@@ -4,17 +4,17 @@ import gsap from 'gsap'
 type Props = {
     submit: (text: string) => void
     close: () => void
+    toggleView?: () => void
 }
 
 const limit = 140
-const swipe = 70
 
-export default function Input({ submit, close }: Props) {
+export default function Input({ submit, close, toggleView }: Props) {
     const [value, setValue] = useState('')
     const field = useRef<HTMLInputElement>(null)
     const overlay = useRef<HTMLDivElement>(null)
     const panel = useRef<HTMLFormElement>(null)
-    const start = useRef({ x: 0, y: 0 })
+    const lastTap = useRef(0)
 
     useEffect(() => {
         field.current?.focus()
@@ -24,6 +24,21 @@ export default function Input({ submit, close }: Props) {
             { scale: 0.9, y: 12, opacity: 0 },
             { scale: 1, y: 0, opacity: 1, duration: 0.35, ease: 'back.out(1.7)' }
         )
+
+        window.history.pushState({ modal: 'input' }, '')
+
+        const handlePopState = () => {
+            dismiss()
+        }
+
+        window.addEventListener('popstate', handlePopState)
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState)
+            if (window.history.state?.modal === 'input') {
+                window.history.back()
+            }
+        }
     }, [])
 
     function dismiss() {
@@ -37,28 +52,27 @@ export default function Input({ submit, close }: Props) {
         if (text) submit(text)
     }
 
-    function down(e: React.PointerEvent) {
-        start.current = { x: e.clientX, y: e.clientY }
-    }
-
-    function up(e: React.PointerEvent) {
-        const dy = e.clientY - start.current.y
-        const dx = e.clientX - start.current.x
-        if (dy > swipe && Math.abs(dx) < swipe) dismiss()
+    function handleDoubleTap() {
+        const now = Date.now()
+        if (now - lastTap.current < 300) {
+            toggleView?.()
+        }
+        lastTap.current = now
     }
 
     return (
         <div
             ref={overlay}
             onClick={dismiss}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#121212]"
         >
             <form
                 ref={panel}
                 onSubmit={send}
-                onPointerDown={down}
-                onPointerUp={up}
-                onClick={e => e.stopPropagation()}
+                onClick={e => {
+                    e.stopPropagation()
+                    handleDoubleTap()
+                }}
                 className="w-full max-w-md px-6"
             >
                 <input

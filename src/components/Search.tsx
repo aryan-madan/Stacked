@@ -5,33 +5,45 @@ type Props = {
     query: string
     change: (value: string) => void
     close: () => void
+    toggleView?: () => void
 }
 
-const swipe = 60
-
-export default function Search({ query, change, close }: Props) {
+export default function Search({ query, change, close, toggleView }: Props) {
     const field = useRef<HTMLInputElement>(null)
     const panel = useRef<HTMLDivElement>(null)
     const overlay = useRef<HTMLDivElement>(null)
-    const start = useRef({ x: 0, y: 0 })
+    const lastTap = useRef(0)
 
     useEffect(() => {
         field.current?.focus()
         gsap.fromTo(panel.current, { y: -12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, ease: 'power2.out' })
+
+        window.history.pushState({ modal: 'search' }, '')
+
+        const handlePopState = () => {
+            dismiss()
+        }
+
+        window.addEventListener('popstate', handlePopState)
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState)
+            if (window.history.state?.modal === 'search') {
+                window.history.back()
+            }
+        }
     }, [])
 
     function dismiss() {
         gsap.to(panel.current, { y: -12, opacity: 0, duration: 0.15, ease: 'power1.in', onComplete: close })
     }
 
-    function down(e: React.PointerEvent) {
-        start.current = { x: e.clientX, y: e.clientY }
-    }
-
-    function up(e: React.PointerEvent) {
-        const dy = e.clientY - start.current.y
-        const dx = e.clientX - start.current.x
-        if (dy < -swipe && Math.abs(dx) < swipe) dismiss()
+    function handleDoubleTap() {
+        const now = Date.now()
+        if (now - lastTap.current < 300) {
+            toggleView?.()
+        }
+        lastTap.current = now
     }
 
     return (
@@ -42,9 +54,10 @@ export default function Search({ query, change, close }: Props) {
         >
             <div
                 ref={panel}
-                onPointerDown={down}
-                onPointerUp={up}
-                onClick={e => e.stopPropagation()}
+                onClick={e => {
+                    e.stopPropagation()
+                    handleDoubleTap()
+                }}
                 className="relative"
             >
                 <input

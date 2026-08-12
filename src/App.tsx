@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
-import Home from './pages/Home'
+import Home from './components/Pit'
 import List, { type ListHandle } from './pages/List'
 import Input from './components/Input'
 import Search from './components/Search'
@@ -14,7 +14,6 @@ function diff(a: Task[], b: Task[]) {
   return { removed }
 }
 
-const swipe = 70
 const zone = 140
 const pullThreshold = 80
 
@@ -30,7 +29,6 @@ export default function App() {
   const future = useRef<Task[][]>([])
   const tasksRef = useRef(tasks)
   const viewRef = useRef(view)
-  const gesture = useRef({ x: 0, y: 0 })
   const pull = useRef({ id: -1, active: false, startY: 0 })
   const pullRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -129,62 +127,64 @@ export default function App() {
     home.current?.explode(id)
   }
 
+  function beginPull() {
+    gsap.set(pullRef.current, { opacity: 0, y: -12, xPercent: -50 })
+  }
+
+  function movePull(progress: number) {
+    const dy = progress * pullThreshold
+    const dampedY = Math.pow(dy, 0.85) * 1.5
+    const cappedProgress = Math.min(progress, 1)
+    gsap.set(containerRef.current, {
+      y: dampedY,
+      borderTopLeftRadius: `${cappedProgress * 40}px`,
+      borderTopRightRadius: `${cappedProgress * 40}px`,
+    })
+    gsap.set(pullRef.current, { opacity: cappedProgress, y: -12 + cappedProgress * 12, xPercent: -50 })
+  }
+
+  function endPull(committed: boolean) {
+    gsap.to(containerRef.current, {
+      y: 0,
+      borderTopLeftRadius: '0px',
+      borderTopRightRadius: '0px',
+      duration: committed ? 0.3 : 0.2,
+      ease: 'power2.out',
+    })
+    if (committed) {
+      gsap.timeline()
+        .to(pullRef.current, { scale: 1.1, xPercent: -50, duration: 0.1, ease: 'power1.out' })
+        .to(pullRef.current, { scale: 1, opacity: 0, y: -12, xPercent: -50, duration: 0.2, ease: 'power2.in' })
+      setOpen(true)
+    } else {
+      gsap.to(pullRef.current, { opacity: 0, y: -12, xPercent: -50, duration: 0.2, ease: 'power2.out' })
+    }
+  }
+
   function gestureDown(e: React.PointerEvent) {
     if (open || search) return
     const target = e.target as HTMLElement
     if (target.closest('[data-pill]') || target.tagName === 'BUTTON' || target.tagName === 'INPUT') return
-    gesture.current = { x: e.clientX, y: e.clientY }
-    if (e.clientY < zone) {
+    if (view === 'pit' && e.clientY < zone) {
       pull.current = { id: e.pointerId, active: true, startY: e.clientY }
+      beginPull()
     }
   }
 
   function gestureMove(e: React.PointerEvent) {
     if (!pull.current.active || e.pointerId !== pull.current.id) return
     const dy = Math.max(0, e.clientY - pull.current.startY)
-    const dampedY = Math.pow(dy, 0.85) * 1.5
-    const progress = Math.min(Math.max(dy / pullThreshold, 0), 1)
-
-    gsap.set(containerRef.current, {
-      y: dampedY,
-      borderTopLeftRadius: `${progress * 40}px`,
-      borderTopRightRadius: `${progress * 40}px`
-    })
-    gsap.set(pullRef.current, { opacity: progress })
+    const progress = dy / pullThreshold
+    movePull(progress)
   }
 
   function gestureUp(e: React.PointerEvent) {
     if (pull.current.active && e.pointerId === pull.current.id) {
       const dy = e.clientY - pull.current.startY
       pull.current.active = false
-      if (dy > pullThreshold) {
-        gsap.to(containerRef.current, {
-          y: 0,
-          borderTopLeftRadius: '0px',
-          borderTopRightRadius: '0px',
-          duration: 0.3,
-          ease: 'power2.out'
-        })
-        gsap.to(pullRef.current, { opacity: 0, duration: 0.2 })
-        setOpen(true)
-      } else {
-        gsap.to(containerRef.current, {
-          y: 0,
-          borderTopLeftRadius: '0px',
-          borderTopRightRadius: '0px',
-          duration: 0.2,
-          ease: 'power2.out'
-        })
-        gsap.to(pullRef.current, { opacity: 0, duration: 0.2 })
-      }
+      endPull(dy > pullThreshold)
       return
     }
-    if (open || search) return
-    const dx = e.clientX - gesture.current.x
-    const dy = e.clientY - gesture.current.y
-    if (Math.abs(dx) < swipe || Math.abs(dx) < Math.abs(dy) * 1.5) return
-    if (dx < 0 && view === 'pit') toggle()
-    if (dx > 0 && view === 'list') toggle()
   }
 
   return (
@@ -196,11 +196,8 @@ export default function App() {
     >
       <div
         ref={pullRef}
-        className="fixed top-0 left-0 right-0 z-0 flex items-center justify-center text-white/40 text-sm tracking-wide select-none pointer-events-none opacity-0"
-        style={{
-          height: 'calc(50px + env(safe-area-inset-top, 0px))',
-          paddingTop: 'env(safe-area-inset-top, 12px)'
-        }}
+        className="fixed left-1/2 z-50 pointer-events-none opacity-0 text-white/30 text-sm font-medium tracking-wide select-none outline-none border-none"
+        style={{ top: 'max(16px, env(safe-area-inset-top))' }}
       >
         new task
       </div>
@@ -209,16 +206,25 @@ export default function App() {
         ref={containerRef}
         className="w-full h-full bg-black overflow-hidden relative shadow-2xl z-10"
       >
-        <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={search ? query : ''} />
+        <Home ref={home} tasks={tasks} update={setTasks} record={record} filter={search ? query : ''} onToggleView={toggle} />
         {view === 'list' && (
           <div className="absolute inset-0 bg-black">
-            <List ref={list} tasks={tasks} complete={complete} filter={search ? query : ''} />
+            <List
+              ref={list}
+              tasks={tasks}
+              complete={complete}
+              filter={search ? query : ''}
+              pullStart={beginPull}
+              pullMove={movePull}
+              pullEnd={endPull}
+              onToggleView={toggle}
+            />
           </div>
         )}
       </div>
 
-      {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} />}
-      {search && <Search query={query} change={setQuery} close={() => { setSearch(false); setQuery('') }} />}
+      {open && <Input submit={t => { spawn(t); setOpen(false) }} close={() => setOpen(false)} toggleView={toggle} />}
+      {search && <Search query={query} change={setQuery} close={() => { setSearch(false); setQuery('') }} toggleView={toggle} />}
     </div>
   )
 }

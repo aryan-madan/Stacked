@@ -7,6 +7,10 @@ type Props = {
     tasks: Task[]
     complete: (id: string) => void
     filter?: string
+    pullStart?: () => void
+    pullMove?: (progress: number) => void
+    pullEnd?: (committed: boolean) => void
+    onToggleView?: () => void
 }
 
 export type ListHandle = {
@@ -14,12 +18,94 @@ export type ListHandle = {
     vanish: (ids: string[], after?: () => void) => void
 }
 
-const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filter }, ref) {
+const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filter, pullStart, pullMove, pullEnd, onToggleView }, ref) {
     const root = useRef<HTMLDivElement>(null)
     const rows = useRef<Record<string, HTMLDivElement>>({})
     const known = useRef<Set<string>>(new Set())
+    const lastTap = useRef<Record<string, number>>({})
     const [checked, setChecked] = useState<Record<string, boolean>>({})
     const [focusedId, setFocusedId] = useState<string | null>(null)
+
+    const pulling = useRef(false)
+    const startY = useRef(0)
+    const currentDy = useRef(0)
+
+    const pullThreshold = 80
+    const scrollSlack = 2
+    const doubleTap = 300
+
+    const lastBgTap = useRef<number>(0)
+    const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    function handleBackgroundTap(e: React.PointerEvent) {
+        if ((e.target as HTMLElement).closest('[data-task-row="true"]')) {
+            return
+        }
+        const now = Date.now()
+        if (now - lastBgTap.current < 300) {
+            if (tapTimer.current) clearTimeout(tapTimer.current)
+            lastBgTap.current = 0
+            onToggleView?.()
+        } else {
+            lastBgTap.current = now
+            tapTimer.current = setTimeout(() => {
+                lastBgTap.current = 0
+            }, 300)
+        }
+    }
+
+    useEffect(() => {
+        const el = root.current
+        if (!el) return
+
+        function handleTouchStart(e: TouchEvent) {
+            if (el && el.scrollTop > scrollSlack) return
+            const touch = e.touches[0]
+            if (!touch) return
+            pulling.current = true
+            startY.current = touch.clientY
+            currentDy.current = 0
+            pullStart?.()
+        }
+
+        function handleTouchMove(e: TouchEvent) {
+            if (!pulling.current) return
+            const touch = e.touches[0]
+            if (!touch) return
+            const dy = touch.clientY - startY.current
+
+            if (dy > 0 && el && el.scrollTop <= scrollSlack) {
+                if (e.cancelable) e.preventDefault()
+                currentDy.current = dy
+                const progress = Math.max(0, dy / pullThreshold)
+                pullMove?.(progress)
+            } else if (dy < -10) {
+                pulling.current = false
+                currentDy.current = 0
+                pullEnd?.(false)
+            }
+        }
+
+        function handleTouchEnd() {
+            if (!pulling.current) return
+            pulling.current = false
+            const committed = currentDy.current > pullThreshold
+            currentDy.current = 0
+            pullEnd?.(committed)
+        }
+
+        el.addEventListener('touchstart', handleTouchStart, { passive: true })
+        el.addEventListener('touchmove', handleTouchMove, { passive: false })
+        el.addEventListener('touchend', handleTouchEnd)
+        el.addEventListener('touchcancel', handleTouchEnd)
+
+        return () => {
+            el.removeEventListener('touchstart', handleTouchStart)
+            el.removeEventListener('touchmove', handleTouchMove)
+            el.removeEventListener('touchend', handleTouchEnd)
+            el.removeEventListener('touchcancel', handleTouchEnd)
+        }
+    }, [pullStart, pullMove, pullEnd])
 
     useLayoutEffect(() => {
         gsap.fromTo(root.current, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power2.out' })
@@ -148,13 +234,30 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
         }
     }
 
+    function rowTap(id: string) {
+        const now = Date.now()
+        const prev = lastTap.current[id] || 0
+        if (now - prev < doubleTap) {
+            lastTap.current[id] = 0
+            toggle(id)
+        } else {
+            lastTap.current[id] = now
+            setFocusedId(id)
+        }
+    }
+
     return (
-        <div ref={root} className="w-screen h-screen text-white overflow-auto pt-[18vh] px-6 sm:px-16 pb-16" style={{ touchAction: 'pan-y', paddingTop: 'max(18vh, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div
+            ref={root}
+            onPointerDown={handleBackgroundTap}
+            className="w-screen h-screen text-white overflow-auto pt-[18vh] px-6 sm:px-16 pb-16 overscroll-none"
+            style={{ paddingTop: 'max(18vh, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
             <div className="max-w-md mx-auto">
                 {tasks.length === 0 && (
                     <div className="fixed inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide text-center px-8">
                         <span className="pointer-coarse:hidden">press ⌘K to add a task</span>
-                        <span className="hidden pointer-coarse:inline">swipe down to add a task</span>
+                        <span className="hidden pointer-coarse:inline">pull down to add a task</span>
                     </div>
                 )}
                 <div className="flex flex-col">
@@ -164,8 +267,9 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
                         return (
                             <div
                                 key={task.id}
+                                data-task-row="true"
                                 ref={el => { if (el) rows.current[task.id] = el; else delete rows.current[task.id] }}
-                                onClick={() => setFocusedId(task.id)}
+                                onClick={() => rowTap(task.id)}
                                 className={`flex items-center gap-4 py-3.5 px-4 rounded-xl transition-colors duration-150 select-none ${isFocused
                                     ? 'bg-white text-black shadow-lg shadow-black/20'
                                     : 'hover:bg-white/[0.05] text-white'

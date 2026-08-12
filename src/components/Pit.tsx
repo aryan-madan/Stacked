@@ -5,6 +5,7 @@ import Pill from './Pill'
 import { burst } from '../helper/burst'
 import type { Task } from '../helper/task'
 import { impact } from '../helper/haptic'
+import { watchTilt } from '../helper/motion'
 
 const margin = 48
 
@@ -13,6 +14,7 @@ type Props = {
     update: React.Dispatch<React.SetStateAction<Task[]>>
     record?: () => void
     filter?: string
+    onToggleView?: () => void
 }
 
 export type PitHandle = {
@@ -22,7 +24,7 @@ export type PitHandle = {
     vanish: (ids: string[], after?: () => void) => void
 }
 
-const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, filter }, ref) {
+const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, filter, onToggleView }, ref) {
     const container = useRef<HTMLDivElement>(null)
     const hint = useRef<HTMLDivElement>(null)
     const engine = useRef(Matter.Engine.create())
@@ -32,6 +34,47 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
     const removing = useRef<Record<string, boolean>>({})
     const lastSave = useRef(0)
     const tasksRef = useRef(tasks)
+    const tiltX = useRef(0)
+    const tiltY = useRef(0)
+
+    const lastBgTap = useRef<number>(0)
+    const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    function handleBackgroundTap(e: React.PointerEvent) {
+        if ((e.target as HTMLElement).closest('[data-pill-item="true"]')) {
+            return
+        }
+        const now = Date.now()
+        if (now - lastBgTap.current < 300) {
+            if (tapTimer.current) clearTimeout(tapTimer.current)
+            lastBgTap.current = 0
+            onToggleView?.()
+        } else {
+            lastBgTap.current = now
+            tapTimer.current = setTimeout(() => {
+                lastBgTap.current = 0
+            }, 300)
+        }
+    }
+
+    useEffect(() => {
+        let mounted = true
+        let unsub: (() => void) | undefined
+        watchTilt((x, y) => {
+            tiltX.current = tiltX.current * 0.75 + x * 0.25
+            tiltY.current = tiltY.current * 0.75 + y * 0.25
+            engine.current.gravity.x = tiltX.current
+            engine.current.gravity.y = tiltY.current
+        }).then(fn => {
+            if (mounted) unsub = fn
+            else fn()
+        })
+        return () => {
+            mounted = false
+            unsub?.()
+        }
+    }, [])
+
     tasksRef.current = tasks
 
     const createBody = useCallback((id: string) => {
@@ -49,9 +92,10 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
         }
         const body = Matter.Bodies.rectangle(x, y, width, height, {
             chamfer: { radius: height / 2 },
-            restitution: 0.2,
-            friction: 0.5,
-            density: 0.001,
+            restitution: 0.25,
+            friction: 0.4,
+            frictionAir: 0.008,
+            density: 0.0015,
             label: id,
         })
         bodies.current[id] = body
@@ -172,24 +216,42 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
 
     useEffect(() => {
         const world = engine.current.world
-        engine.current.gravity.y = 1
+        engine.current.gravity.scale = 0.001
+        engine.current.gravity.y = 1.0
         engine.current.positionIterations = 10
         engine.current.velocityIterations = 10
-        let walls: Matter.Body[] = []
 
-        function build() {
-            const width = window.innerWidth
-            const height = window.innerHeight
-            const thick = 100
-            return [
-                Matter.Bodies.rectangle(width / 2, height + thick / 2, width, thick, { isStatic: true }),
-                Matter.Bodies.rectangle(-thick / 2, height / 2, thick, height * 2, { isStatic: true }),
-                Matter.Bodies.rectangle(width + thick / 2, height / 2, thick, height * 2, { isStatic: true }),
-            ]
+        const thickness = 200
+        let width = window.innerWidth
+        let height = window.innerHeight
+
+        const bottomWall = Matter.Bodies.rectangle(width / 2, height + thickness / 2, width * 2, thickness, {
+            isStatic: true,
+            restitution: 0.2,
+            friction: 0.5,
+        })
+        const leftWall = Matter.Bodies.rectangle(-thickness / 2, height / 2, thickness, height * 4, {
+            isStatic: true,
+            restitution: 0.2,
+            friction: 0.5,
+        })
+        const rightWall = Matter.Bodies.rectangle(width + thickness / 2, height / 2, thickness, height * 4, {
+            isStatic: true,
+            restitution: 0.2,
+            friction: 0.5,
+        })
+
+        Matter.Composite.add(world, [bottomWall, leftWall, rightWall])
+
+        const handleResize = () => {
+            width = window.innerWidth
+            height = window.innerHeight
+            Matter.Body.setPosition(bottomWall, { x: width / 2, y: height + thickness / 2 })
+            Matter.Body.setPosition(leftWall, { x: -thickness / 2, y: height / 2 })
+            Matter.Body.setPosition(rightWall, { x: width + thickness / 2, y: height / 2 })
         }
 
-        walls = build()
-        Matter.Composite.add(world, walls)
+        window.addEventListener('resize', handleResize)
 
         for (const id in elements.current) {
             createBody(id)
@@ -209,6 +271,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
             const pad = 120
             const now = Date.now()
             let dirty = false
+
             for (const id in elements.current) {
                 if (!bodies.current[id] && !removing.current[id]) {
                     createBody(id)
@@ -218,11 +281,13 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
                 const body = bodies.current[id]
                 const el = elements.current[id]
                 if (!el) continue
-                const escaped = body.position.y < -pad
-                if (escaped) {
+
+                const escapedTop = body.position.y < -pad
+
+                if (escapedTop) {
                     if (!outside.current[id]) outside.current[id] = now
                     else if (now - outside.current[id] > 1000) {
-                        Matter.Body.setPosition(body, { x: window.innerWidth / 2, y: margin + el.offsetHeight })
+                        Matter.Body.setPosition(body, { x: width / 2, y: margin + el.offsetHeight })
                         Matter.Body.setVelocity(body, { x: 0, y: 0 })
                         delete outside.current[id]
                         gsap.fromTo(el, { scale: 0.4 }, { scale: 1, duration: 0.4, ease: 'back.out(1.7)' })
@@ -247,28 +312,8 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
         }
         gsap.ticker.add(sync)
 
-        function resize() {
-            Matter.Composite.remove(world, walls)
-            walls = build()
-            Matter.Composite.add(world, walls)
-            const width = window.innerWidth
-            const height = window.innerHeight
-            for (const id in bodies.current) {
-                const body = bodies.current[id]
-                const el = elements.current[id]
-                if (!el) continue
-                const halfWidth = el.offsetWidth / 2
-                const halfHeight = el.offsetHeight / 2
-                const x = Math.min(Math.max(body.position.x, halfWidth), width - halfWidth)
-                const y = Math.min(body.position.y, height - halfHeight)
-                Matter.Body.setPosition(body, { x, y })
-                Matter.Body.setVelocity(body, { x: 0, y: 0 })
-            }
-        }
-        window.addEventListener('resize', resize)
-
         return () => {
-            window.removeEventListener('resize', resize)
+            window.removeEventListener('resize', handleResize)
             gsap.ticker.remove(sync)
             Matter.Runner.stop(runner)
             Matter.Composite.clear(world, false)
@@ -279,17 +324,21 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
     }, [createBody, update])
 
     return (
-        <div ref={container} className="relative w-screen h-screen bg-black overflow-hidden">
+        <div ref={container} onPointerDown={handleBackgroundTap} className="relative w-screen h-screen bg-black overflow-hidden">
             <div
                 ref={hint}
                 className={`absolute inset-0 flex items-center justify-center pointer-events-none text-white/25 text-sm tracking-wide text-center px-8 ${tasks.length === 0 ? 'opacity-100' : 'opacity-0'}`}
             >
                 <span className="pointer-coarse:hidden">press ⌘K to add a task</span>
-                <span className="hidden pointer-coarse:inline">swipe down to add a task</span>
+                <span className="hidden pointer-coarse:inline">pull down to add a task</span>
             </div>
             {tasks.map(task => {
                 const match = !filter || task.text.toLowerCase().includes(filter.toLowerCase())
-                return <Pill key={task.id} task={task} mount={mount} explode={explode} dim={!match} />
+                return (
+                    <div key={task.id} data-pill-item="true" className="contents">
+                        <Pill task={task} mount={mount} explode={explode} dim={!match} />
+                    </div>
+                )
             })}
         </div>
     )
