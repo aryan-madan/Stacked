@@ -4,6 +4,7 @@ import gsap from 'gsap'
 import Pill from './Pill'
 import { burst } from '../helper/burst'
 import type { Task } from '../helper/task'
+import { impact } from '../helper/haptic'
 
 const margin = 48
 
@@ -75,6 +76,7 @@ const Pit = forwardRef<PitHandle, Props>(function Pit({ tasks, update, record, f
     }, [createBody])
 
     function explode(id: string) {
+        impact()
         record?.()
         removing.current[id] = true
         const body = bodies.current[id]

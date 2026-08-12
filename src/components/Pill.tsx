@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import type { Task } from '../helper/task'
+import { tap } from '../helper/haptic'
 
 type Props = {
     task: Task
@@ -56,9 +57,9 @@ export default function Pill({ task, mount, explode, dim }: Props) {
     }, [dim])
 
     function start(e: React.PointerEvent) {
+        tap()
         cancel()
         origin.current = { x: e.clientX, y: e.clientY }
-
         timer.current = window.setTimeout(() => explode(task.id), hold)
         charge.current = gsap.to(ref.current, {
             opacity: 0.25,

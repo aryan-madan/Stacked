@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import type { Task } from '../helper/task'
+import { success } from '../helper/haptic'
 
 type Props = {
     tasks: Task[]
@@ -138,6 +139,7 @@ const List = forwardRef<ListHandle, Props>(function List({ tasks, complete, filt
     function toggle(id: string) {
         if (checked[id]) return
         setChecked(prev => ({ ...prev, [id]: true }))
+        success()
         const el = rows.current[id]
         if (el) {
             window.setTimeout(() => collapse(el, () => complete(id)), 150)
