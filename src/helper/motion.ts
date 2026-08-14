@@ -67,7 +67,7 @@ export async function watchTilt(change: (x: number, y: number) => void): Promise
             }
         } catch {
         }
-    } else if ('DeviceMotionEvent' in window) {
+    } else if ('DeviceMotionEvent' in window && navigator.maxTouchPoints > 0) {
         window.addEventListener('devicemotion', handleMotion)
         return () => window.removeEventListener('devicemotion', handleMotion)
     }
