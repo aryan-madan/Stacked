@@ -27,8 +27,12 @@ Stacked visualises each task in a pill, which acts like a real physics object wi
 | Complete a task | Hold the pill or double click task | Hold the pill or double tap task |
 | Undo / Redo | `⌘Z` / `⌘⇧Z` | — |
 
-I still need to implement undo / redo on mobile D:
+## AI Usage
+
+AI was used for debugging, and some design.
 
 ---
+
+Try Stacked out [here.](https://workstacked.vercel.app/)
 
 Made with ❤️ by Ary
